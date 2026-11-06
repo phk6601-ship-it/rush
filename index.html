@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>러시아워 교실 — 빨강이를 구출하라!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<script>
+/* ================================================================
+   ✏️ 선생님이 고칠 곳은 여기뿐이에요
+   1) firebase : Firebase 콘솔 > 프로젝트 설정 > 내 앱(웹)의 firebaseConfig 를
+                 { apiKey: "...", ..., databaseURL: "https://....firebaseio.com" } 그대로 붙여 넣기
+                 (교실 대소동에서 쓰던 Firebase 프로젝트를 그대로 써도 돼요. 'rushhour/' 칸만 따로 써요)
+                 비워 두면(null) '데모 모드' — 같은 컴퓨터 안에서만 켜고 꺼져요.
+   2) room   : 교실 이름. 주소 뒤에 ?room=3반 처럼 붙이면 반마다 스위치를 따로 쓸 수 있어요.
+   3) teacherPin : 선생님 화면(주소 뒤에 ?teacher) 비밀번호
+   ================================================================ */
+const CLASSROOM_CONFIG = {
+  firebase: null,
+  room: "gangbuk",
+  teacherPin: "1234"
+};
+</script>
+<style>
+:root{
+  --ink:#1d1a2f; --paper:#fff6dc; --cream:#fffaf0; --muted:#6d6680;
+  --red:#ff4d4d; --yellow:#ffd23f; --mint:#3ddc97; --sky:#4cc9f0; --blue:#4d7cfe; --violet:#8d5cf6; --pink:#ff7eb6;
+  --tier:#3ddc97; --tier-deep:#1f9d6a; --tier-soft:#d8f9ea;
+  --display:'Jua','Black Han Sans','Malgun Gothic',sans-serif;
+  --body:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden}
+body{
+  font-family:var(--body);color:var(--ink);user-select:none;-webkit-user-select:none;touch-action:none;
+  background:
+    radial-gradient(circle at 12% 18%, #ffffff 0 2px, transparent 3px) 0 0/38px 38px,
+    linear-gradient(180deg,var(--paper),#ffe9b0);
+}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0;touch-action:manipulation}
+button:focus-visible{outline:4px solid var(--blue);outline-offset:3px}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;padding:14px 18px 16px;gap:12px}
+.hidden{display:none!important}
+.chunky{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--display);font-size:18px;line-height:1;
+  padding:12px 18px;border:3px solid var(--ink);border-radius:16px;background:#fff;box-shadow:0 4px 0 var(--ink);transition:transform .08s,box-shadow .08s}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+.btn:disabled{opacity:.4;pointer-events:none}
+.btn.go{background:var(--tier);}
+.btn.red{background:var(--red);color:#fff}
+.btn.yellow{background:var(--yellow)}
+.btn.small{font-size:15px;padding:9px 13px;border-radius:13px}
+.icon-btn{width:48px;height:48px;padding:0;font-size:22px}
+
+/* ---------- HOME ---------- */
+.home-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.title-wrap{display:flex;align-items:center;gap:14px}
+.logo-car{width:74px;height:44px;flex-shrink:0;position:relative;animation:bob 1.6s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-3px) rotate(-2deg)}}
+.title{font-family:var(--display);font-size:clamp(30px,4.6vw,46px);line-height:1;margin:0;letter-spacing:-1px}
+.title .r{color:var(--red);-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;text-shadow:0 3px 0 var(--ink)}
+.subtitle{margin:6px 0 0;font-size:clamp(13px,1.6vw,16px);color:var(--muted);font-weight:700}
+.home-stats{display:flex;gap:8px;align-items:center}
+.stat-chip{display:flex;align-items:center;gap:6px;background:#fff;border:3px solid var(--ink);border-radius:999px;padding:7px 14px;font-family:var(--display);font-size:18px;box-shadow:0 3px 0 var(--ink);white-space:nowrap}
+.stat-chip .star{color:#f5b300}
+.tiers{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.tier-card{position:relative;display:flex;flex-direction:column;align-items:stretch;text-align:left;padding:16px 16px 14px;background:var(--c);overflow:hidden;
+  border:3px solid var(--ink);border-radius:24px;box-shadow:0 6px 0 var(--ink);transition:transform .12s}
+.tier-card:hover{transform:translateY(-3px) rotate(-.6deg)}
+.tier-card:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
+.tier-card::before{content:"";position:absolute;inset:auto -20% -40px -20%;height:90px;background:repeating-linear-gradient(90deg,#ffffff55 0 26px,transparent 26px 52px);transform:rotate(-6deg)}
+.tier-level{font-family:var(--display);font-size:14px;background:var(--ink);color:#fff;border-radius:999px;padding:5px 10px;align-self:flex-start}
+.tier-emoji{flex:1;display:flex;align-items:center;justify-content:center;font-size:clamp(56px,9vw,112px);line-height:1;margin:8px 0;filter:drop-shadow(0 6px 0 #0003);transition:transform .2s}
+.tier-card:hover .tier-emoji{transform:scale(1.08) rotate(-4deg)}
+.tier-name{font-family:var(--display);font-size:clamp(22px,2.7vw,30px);line-height:1.1}
+.tier-desc{font-size:13px;font-weight:700;opacity:.75;margin-top:6px;line-height:1.45;min-height:38px}
+.tier-progress{display:flex;gap:3px;margin:14px 0 10px}
+.tier-progress i{flex:1;height:10px;border-radius:4px;background:#ffffff80;border:2px solid var(--ink)}
+.tier-progress i.on{background:var(--ink)}
+.tier-foot{display:flex;align-items:center;justify-content:space-between;font-family:var(--display);font-size:17px;position:relative}
+.tier-go{background:#fff;border:3px solid var(--ink);border-radius:12px;padding:6px 12px;box-shadow:0 3px 0 var(--ink)}
+.home-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;font-weight:700;color:var(--muted)}
+.link-btn{text-decoration:underline;text-underline-offset:3px;font-weight:700;color:var(--muted)}
+
+/* ---------- STAGE SELECT ---------- */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tier-chip{display:inline-flex;align-items:center;gap:8px;background:var(--tier);border:3px solid var(--ink);border-radius:999px;padding:7px 16px 7px 10px;font-family:var(--display);font-size:20px;box-shadow:0 3px 0 var(--ink)}
+.tier-chip .e{font-size:24px}
+.stages-head{text-align:center}
+.stages-head h2{font-family:var(--display);font-size:clamp(26px,3.6vw,38px);margin:4px 0 2px}
+.stages-head p{margin:0;font-weight:700;color:var(--muted)}
+.lot-select{flex:1;min-height:0;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(2,1fr);gap:14px;padding:16px;background:#3a3b4c;border:3px solid var(--ink);border-radius:26px;box-shadow:0 6px 0 var(--ink);position:relative}
+.lot-select::after{content:"";position:absolute;left:16px;right:16px;top:50%;height:6px;margin-top:-3px;background:repeating-linear-gradient(90deg,var(--yellow) 0 30px,transparent 30px 50px);border-radius:3px;pointer-events:none}
+.spot{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:3px dashed #ffffff70;border-radius:16px;color:#fff;font-family:var(--display);transition:transform .1s;z-index:1}
+.spot .n{font-size:clamp(28px,4vw,44px);line-height:1}
+.spot .p{font-size:13px;opacity:.7}
+.spot .s{font-size:18px;letter-spacing:1px;color:#ffffff40}
+.spot .s b{color:var(--yellow);font-weight:400}
+.spot.cleared{background:#ffffff14;border-style:solid;border-color:#ffffffb0}
+.spot.next{background:var(--tier);color:var(--ink);border:3px solid var(--ink);box-shadow:0 5px 0 var(--ink);animation:pulse 1.2s ease-in-out infinite}
+.spot.next .s{color:#0004}
+@keyframes pulse{50%{transform:scale(1.04)}}
+.spot.locked{opacity:.35;pointer-events:none}
+.spot:active{transform:scale(.96)}
+
+/* ---------- GAME ---------- */
+#screen-game{padding:10px 14px 12px}
+.game-body{flex:1;min-height:0;display:flex;gap:16px;align-items:center;justify-content:center}
+.panel{display:flex;flex-direction:column;gap:10px;width:250px;flex-shrink:0}
+.card{background:#fff;border:3px solid var(--ink);border-radius:18px;box-shadow:0 4px 0 var(--ink);padding:12px 14px}
+.stage-title{font-family:var(--display);font-size:30px;line-height:1}
+.stage-title small{font-size:16px;color:var(--muted)}
+.mini-label{font-size:12px;font-weight:800;color:var(--muted)}
+.big-num{font-family:var(--display);font-size:30px;line-height:1.05}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.goal{font-size:12px;font-weight:800;margin-top:6px;display:flex;align-items:center;gap:6px}
+.goal-stars{font-size:22px;letter-spacing:1px;color:#e5e1d6;line-height:1}
+.goal-stars b{color:#f5b300;font-weight:400;text-shadow:0 2px 0 #0002}
+.btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn-grid .wide{grid-column:1/-1}
+.hint-box{font-size:14px;font-weight:800;line-height:1.45;background:#fff8c8;border:3px solid var(--ink);border-radius:14px;padding:10px 12px;min-height:44px}
+.hint-box:empty{display:none}
+
+.board-wrap{--size:min(calc(100dvh - 40px), calc(100vw - 330px), 640px);width:var(--size);height:var(--size);position:relative;flex-shrink:0}
+.board{position:absolute;inset:0;padding:calc(var(--size) * .035);background:var(--tier);border:4px solid var(--ink);border-radius:28px;box-shadow:0 8px 0 var(--ink), inset 0 0 0 6px #ffffff55}
+.lot{position:relative;width:100%;height:100%;border-radius:16px;border:3px solid var(--ink);
+  background:
+    linear-gradient(90deg,transparent calc(100% - 2px),#ffffff26 0) 0 0/calc(100%/6) 100%,
+    linear-gradient(180deg,transparent calc(100% - 2px),#ffffff26 0) 0 0/100% calc(100%/6),
+    #3a3b4c}
+.exit{position:absolute;right:-14px;width:calc(var(--size) * .035 + 14px);top:0;display:flex;align-items:center;justify-content:center;z-index:3;
+  background:repeating-conic-gradient(var(--ink) 0 25%,#fff 0 50%) 0 0/12px 12px;border:3px solid var(--ink);border-left:0;border-radius:0 12px 12px 0}
+.exit-arrow{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--red);color:#fff;border:2.5px solid var(--ink);font-size:11px;animation:nudge .9s ease-in-out infinite}
+@keyframes nudge{50%{transform:translateX(4px)}}
+.cells{position:absolute;inset:0;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(6,1fr)}
+.cars{position:absolute;inset:0;pointer-events:none}
+.car{position:absolute;padding:calc(var(--cell) * .07);pointer-events:auto;cursor:grab;transition:left .16s cubic-bezier(.3,1.4,.6,1),top .16s cubic-bezier(.3,1.4,.6,1);z-index:2;touch-action:none}
+.car.dragging{transition:none;z-index:6;cursor:grabbing}
+.car.exiting{transition:left .6s cubic-bezier(.5,0,.8,.4)!important;z-index:8}
+.car .rot{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(var(--rot,0deg))}
+.car.H .rot{width:calc(100% - var(--cell) * .14);height:calc(100% - var(--cell) * .14)}
+.car.V .rot{width:calc(var(--cell) * var(--len) - var(--cell) * .14);height:calc(var(--cell) * .86)}
+.body{position:absolute;inset:0;background:var(--c);border:3px solid var(--ink);border-radius:calc(var(--cell) * .2);box-shadow:inset 0 calc(var(--cell) * -.08) 0 #0000002a, 0 4px 0 var(--ink)}
+.wh{position:absolute;width:calc(var(--cell) * .2);height:calc(var(--cell) * .1);background:var(--ink);border-radius:4px}
+.wh.a{top:-5px;left:14%}.wh.b{bottom:-5px;left:14%}.wh.c{top:-5px;right:14%}.wh.d{bottom:-5px;right:14%}
+.glass{position:absolute;top:14%;bottom:14%;right:13%;width:calc(var(--cell) * .2);background:#bfe9ff;border:2.5px solid var(--ink);border-radius:6px 10px 10px 6px}
+.rear{position:absolute;top:20%;bottom:20%;left:9%;width:calc(var(--cell) * .1);background:#bfe9ff;border:2.5px solid var(--ink);border-radius:4px}
+.roof{position:absolute;top:18%;bottom:18%;left:calc(9% + var(--cell) * .16);right:calc(13% + var(--cell) * .24);background:#ffffff40;border-radius:6px}
+.light{position:absolute;right:-1px;width:5px;height:16%;background:#fff3a8;border-radius:3px}
+.light.t{top:12%}.light.b{bottom:12%}
+.cargo{position:absolute;top:8%;bottom:8%;left:5%;right:calc(13% + var(--cell) * .34);background:repeating-linear-gradient(90deg,#ffffff70 0 6px,#ffffff30 6px 14px);border:2.5px solid var(--ink);border-radius:8px}
+.eyes{position:absolute;top:12%;bottom:12%;right:10%;width:calc(var(--cell) * .42);background:#fff;border:2.5px solid var(--ink);border-radius:10px;display:flex;flex-direction:column;justify-content:space-around;align-items:center;padding:2px 0}
+.eyes b{display:block;width:calc(var(--cell) * .2);height:calc(var(--cell) * .2);border-radius:50%;background:#fff;border:2.5px solid var(--ink);position:relative}
+.eyes b::after{content:"";position:absolute;width:50%;height:50%;border-radius:50%;background:var(--ink);right:6%;top:25%;transition:transform .2s}
+.hero .body{background:var(--red)}
+.hero .stripe{position:absolute;left:8%;right:calc(10% + var(--cell) * .48);top:50%;height:calc(var(--cell) * .1);margin-top:calc(var(--cell) * -.05);background:#fff;border-radius:3px;opacity:.85}
+.car.sel .body{outline:4px solid #fff;outline-offset:2px;box-shadow:inset 0 calc(var(--cell) * -.08) 0 #0000002a,0 0 0 9px var(--yellow)}
+.car.hint .body{animation:hintblink .5s ease-in-out 5}
+@keyframes hintblink{50%{box-shadow:0 0 0 10px #fff,0 0 0 16px var(--sky)}}
+.car.bump{animation:bump .25s}
+@keyframes bump{30%{transform:translate(var(--bx,0),var(--by,0))}}
+
+/* ---------- MODALS ---------- */
+.modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:#1d1a2f99}
+.modal-card{width:min(440px,100%);text-align:center;background:var(--cream);border:4px solid var(--ink);border-radius:30px;box-shadow:0 10px 0 var(--ink);padding:24px 22px 22px;animation:pop .35s cubic-bezier(.3,1.6,.6,1)}
+@keyframes pop{from{transform:scale(.6);opacity:0}}
+.modal-card h2{font-family:var(--display);font-size:42px;margin:4px 0 2px;line-height:1.1}
+.modal-card p{margin:6px 0;font-weight:700;color:var(--muted);line-height:1.5}
+.big-stars{display:flex;justify-content:center;gap:8px;margin:10px 0 6px}
+.big-stars span{font-size:58px;line-height:1;color:#e5e1d6;-webkit-text-stroke:3px var(--ink);paint-order:stroke fill;opacity:0;transform:scale(.3) rotate(-30deg)}
+.big-stars span.on{color:var(--yellow)}
+.big-stars span.show{animation:starpop .45s cubic-bezier(.3,1.7,.5,1) forwards}
+@keyframes starpop{to{opacity:1;transform:none}}
+.result-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.result-row .card{padding:10px}
+.modal-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.modal-actions .btn{flex:1;min-width:120px}
+.badge{display:inline-block;font-family:var(--display);font-size:15px;background:var(--tier);border:3px solid var(--ink);border-radius:999px;padding:5px 12px}
+.confetti{position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden}
+.confetti i{position:absolute;top:-20px;width:12px;height:18px;border:2px solid var(--ink);border-radius:3px;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+
+#freeze{position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px;background:#1d1a2fd9;color:#fff}
+#freeze .gate{font-size:70px}
+#freeze h2{font-family:var(--display);font-size:38px;margin:0}
+#freeze p{margin:0;font-weight:700;opacity:.85}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width:1000px){.tiers{grid-template-columns:repeat(2,1fr)}.tier-emoji{margin:2px 0;font-size:clamp(40px,7vh,64px)}.tier-desc{min-height:0}}
+@media (orientation:portrait){
+  .game-body{flex-direction:column;gap:12px}
+  .panel{width:100%;max-width:640px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .panel .hint-box{grid-column:1/-1}
+  .board-wrap{--size:min(calc(100vw - 40px), calc(100dvh - 330px), 640px)}
+  .stage-title{font-size:24px}
+  .lot-select{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(5,1fr)}
+  .lot-select::after{left:50%;right:auto;top:16px;bottom:16px;width:6px;height:auto;margin:0 0 0 -3px;background:repeating-linear-gradient(180deg,var(--yellow) 0 30px,transparent 30px 50px)}
+}
+@media (max-height:640px) and (orientation:landscape){.panel{width:220px;gap:7px}.card{padding:8px 11px}.big-num{font-size:24px}.btn{font-size:16px;padding:9px 12px}.board-wrap{--size:min(calc(100dvh - 30px), calc(100vw - 290px), 640px)}}
+@media (max-width:560px){.home-top{flex-direction:column;align-items:flex-start}.logo-car{display:none}}
+
+/* ---------- 학생 차단기 화면 ---------- */
+#gate{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;gap:6px;
+  background:radial-gradient(circle at 12% 18%,#fff 0 2px,transparent 3px) 0 0/38px 38px,linear-gradient(180deg,var(--paper),#ffe9b0)}
+#gate h1{font-family:var(--display);font-weight:400;font-size:clamp(32px,5vw,52px);margin:10px 0 0;line-height:1.2}
+#gate p{margin:0;font-weight:700;color:var(--muted);font-size:clamp(15px,1.8vw,19px);line-height:1.6;max-width:560px}
+.gate-code{font-family:var(--display);font-size:16px;background:#fff;border:3px solid var(--ink);border-radius:999px;padding:5px 14px}
+.gate-note{margin-top:14px;font-family:var(--display);font-size:20px;background:var(--yellow);border:3px solid var(--ink);border-radius:16px;padding:10px 18px;box-shadow:0 4px 0 var(--ink)}
+.gate-note:empty{display:none}
+.booth{position:relative;width:min(420px,86vw);height:170px;margin-bottom:12px}
+.booth::after{content:"";position:absolute;left:-20px;right:-20px;bottom:0;height:14px;background:#3a3b4c;border:3px solid var(--ink);border-radius:8px}
+.booth-house{position:absolute;left:4%;bottom:14px;width:84px;height:120px;background:#fff;border:3px solid var(--ink);border-radius:14px 14px 4px 4px;box-shadow:0 4px 0 var(--ink)}
+.booth-house::before{content:"";position:absolute;left:-8px;right:-8px;top:-14px;height:20px;background:var(--red);border:3px solid var(--ink);border-radius:8px}
+.booth-house span{position:absolute;left:50%;top:22px;transform:translateX(-50%);width:44px;height:44px;display:grid;place-items:center;font-family:var(--display);font-size:28px;color:#fff;background:var(--blue);border:3px solid var(--ink);border-radius:10px}
+.barrier{position:absolute;left:calc(4% + 84px);bottom:14px;width:16px;height:70px;background:var(--ink);border-radius:6px 6px 0 0}
+.arm{position:absolute;left:8px;top:6px;width:min(220px,46vw);height:16px;transform-origin:0 50%;border:3px solid var(--ink);border-radius:8px;background:repeating-linear-gradient(90deg,var(--red) 0 22px,#fff 22px 44px)}
+#gate.waiting .arm{animation:wiggle 1.4s ease-in-out infinite}
+@keyframes wiggle{50%{transform:rotate(-6deg)}}
+.waiting-car{position:absolute;right:2%;bottom:20px;width:120px;height:58px;background:var(--red);border:3px solid var(--ink);border-radius:16px;box-shadow:0 4px 0 var(--ink),inset 0 -8px 0 #0002;animation:idle 1.2s ease-in-out infinite}
+.waiting-car::before,.waiting-car::after{content:"";position:absolute;bottom:-12px;width:26px;height:16px;background:var(--ink);border-radius:6px}
+.waiting-car::before{left:14px}.waiting-car::after{right:14px}
+.wc-eyes{position:absolute;left:10px;top:8px;display:flex;gap:4px}
+.wc-eyes b{width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid var(--ink);position:relative}
+.wc-eyes b::after{content:"";position:absolute;left:2px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--ink)}
+@keyframes idle{50%{transform:translateY(-2px)}}
+
+/* ---------- 선생님 화면 ---------- */
+#teacher a{color:inherit;text-decoration:none}
+#teacher{position:fixed;inset:0;z-index:95;overflow:auto;touch-action:auto;user-select:text;
+  background:radial-gradient(circle at 12% 18%,#fff 0 2px,transparent 3px) 0 0/38px 38px,linear-gradient(180deg,var(--paper),#ffe9b0)}
+.t-wrap{max-width:980px;margin:0 auto;padding:18px clamp(16px,4vw,40px) 40px}
+.t-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.t-brand{font-family:var(--display);font-size:24px;display:flex;align-items:center;gap:10px}
+.t-brand i{width:46px;height:28px;background:var(--red);border:3px solid var(--ink);border-radius:9px;box-shadow:0 3px 0 var(--ink)}
+.kicker{display:inline-block;font-family:var(--display);font-size:14px;background:var(--ink);color:#fff;border-radius:999px;padding:6px 12px}
+.t-wrap h1{font-family:var(--display);font-weight:400;font-size:clamp(32px,4.6vw,50px);line-height:1.15;margin:12px 0 20px}
+.t-wrap h1 mark{background:linear-gradient(transparent 55%,var(--yellow) 55%);color:inherit;padding:0 4px}
+.sheet{background:#fff;border:3px solid var(--ink);border-radius:28px;box-shadow:0 7px 0 var(--ink);padding:clamp(20px,3vw,32px);margin-bottom:22px}
+.sheet h2{font-family:var(--display);font-weight:400;font-size:clamp(26px,3.2vw,34px);margin:10px 0 8px;line-height:1.2}
+.sheet p{margin:0;font-weight:700;color:var(--muted);line-height:1.7}
+.control{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:clamp(16px,3vw,32px)}
+.control.is-open{background:#e3fbef}.control.is-closed{background:#fff0ef}
+.signal{display:flex;flex-direction:column;gap:9px;background:var(--ink);padding:12px 10px;border-radius:22px}
+.signal i{width:40px;height:40px;border-radius:50%;background:#4a4560;transition:.25s}
+.is-closed .signal .r{background:var(--red);box-shadow:0 0 18px var(--red)}
+.is-open .signal .g{background:var(--mint);box-shadow:0 0 18px var(--mint)}
+.state-tag{display:inline-block;font-family:var(--display);font-size:16px;border:3px solid var(--ink);border-radius:999px;padding:5px 12px;background:#ffb4ae}
+.is-open .state-tag{background:var(--mint)}
+.mega{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;width:clamp(150px,18vw,200px);aspect-ratio:1;border:4px solid var(--ink);border-radius:50%;font-family:var(--display);font-size:clamp(22px,2.6vw,28px);box-shadow:0 9px 0 var(--ink);transition:transform .08s,box-shadow .08s;background:var(--mint)}
+.mega:active:not(:disabled){transform:translateY(6px);box-shadow:0 3px 0 var(--ink)}
+.is-open .mega{background:var(--red);color:#fff}
+.mega-icon{font-size:clamp(34px,4vw,46px);line-height:1}
+.share{display:grid;grid-template-columns:1fr auto;gap:16px 24px;align-items:center}
+.share .lbl{font-family:var(--display);font-size:15px;color:var(--muted)}
+.room-big{font-family:var(--display);font-size:clamp(34px,5vw,54px);line-height:1.1;margin:4px 0 12px;word-break:break-all}
+.share-actions{display:flex;flex-wrap:wrap;gap:10px}
+.share input{width:100%;margin-top:12px;border:3px dashed #c9c3b5;border-radius:14px;background:var(--cream);padding:11px 14px;font-weight:700;color:var(--muted);font-size:14px}
+.qr{width:170px;height:170px;border:3px solid var(--ink);border-radius:16px;background:#fff;padding:8px;display:grid;place-items:center}
+.qr img{width:100%;height:100%;image-rendering:pixelated}
+.warn{background:#fff3b0;border:3px solid var(--ink);border-radius:18px;padding:14px 16px;font-weight:700;line-height:1.6;margin-bottom:22px}
+.warn.err{background:#ffd7d3}
+.t-note{font-weight:700;color:var(--muted);line-height:1.7;font-size:14px;margin:0}
+.pin-box{max-width:420px;margin:40px auto;text-align:center}
+.pin-box input{width:100%;font-family:var(--display);font-size:32px;letter-spacing:8px;text-align:center;border:3px solid var(--ink);border-radius:16px;padding:10px;margin:14px 0}
+@media (max-width:760px){.control{grid-template-columns:1fr;justify-items:center;text-align:center}.signal{flex-direction:row}.share{grid-template-columns:1fr}.qr{justify-self:center}}
+</style>
+</head>
+<body>
+
+<!-- ============ HOME : 난이도 고르기 ============ -->
+<section id="screen-home" class="screen">
+  <div class="home-top">
+    <div class="title-wrap">
+      <svg class="logo-car" viewBox="0 0 74 44" aria-hidden="true"><rect x="3" y="6" width="66" height="32" rx="10" fill="#ff4d4d" stroke="#1d1a2f" stroke-width="3"/><rect x="12" y="2" width="12" height="6" rx="3" fill="#1d1a2f"/><rect x="48" y="2" width="12" height="6" rx="3" fill="#1d1a2f"/><rect x="12" y="36" width="12" height="6" rx="3" fill="#1d1a2f"/><rect x="48" y="36" width="12" height="6" rx="3" fill="#1d1a2f"/><rect x="43" y="10" width="20" height="24" rx="7" fill="#fff" stroke="#1d1a2f" stroke-width="2.5"/><circle cx="53" cy="16" r="4.5" fill="#fff" stroke="#1d1a2f" stroke-width="2"/><circle cx="53" cy="28" r="4.5" fill="#fff" stroke="#1d1a2f" stroke-width="2"/><circle cx="55" cy="16" r="2.2" fill="#1d1a2f"/><circle cx="55" cy="28" r="2.2" fill="#1d1a2f"/><rect x="10" y="20" width="28" height="4" rx="2" fill="#fff" opacity=".85"/></svg>
+      <div>
+        <h1 class="title">꽉 막힌 주차장, <span class="r">빨강이</span>를 구출하라!</h1>
+        <p class="subtitle">차를 밀고 당겨서 빨간 자동차를 오른쪽 출구로 내보내요. 오늘은 어떤 난이도에 도전할까요?</p>
+      </div>
+    </div>
+    <div class="home-stats">
+      <span class="stat-chip"><span class="star">★</span><span id="home-stars">0</span><small style="opacity:.5">/120</small></span>
+      <button class="btn small icon-btn" id="sound-home" onclick="toggleSound()" aria-label="소리 켜기/끄기">🔊</button>
+    </div>
+  </div>
+  <div class="tiers" id="tiers"></div>
+  <div class="home-foot">
+    <span>👆 차를 잡고 밀기 · ⌨️ 차를 누르고 방향키</span>
+    <button class="link-btn" onclick="openModal('modal-reset')">내 기록 지우기</button>
+  </div>
+</section>
+
+<!-- ============ STAGES : 스테이지 고르기 ============ -->
+<section id="screen-stages" class="screen hidden">
+  <div class="bar">
+    <button class="btn small" onclick="goHome()">◀ 난이도 바꾸기</button>
+    <span class="tier-chip"><span class="e" id="st-emoji">🐣</span><span id="st-name">초보 운전</span></span>
+    <span class="stat-chip"><span class="star">★</span><span id="st-stars">0</span><small style="opacity:.5">/30</small></span>
+  </div>
+  <div class="stages-head">
+    <h2>몇 번 주차 칸에 도전할까?</h2>
+    <p>한 칸을 깨면 다음 칸이 열려요. 최소 이동으로 풀면 별 3개!</p>
+  </div>
+  <div class="lot-select" id="spots"></div>
+</section>
+
+<!-- ============ GAME ============ -->
+<section id="screen-game" class="screen hidden">
+  <div class="game-body">
+    <aside class="panel">
+      <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div>
+          <div class="mini-label" id="g-tier">🐣 초보 운전</div>
+          <div class="stage-title">STAGE <span id="g-stage">1</span><small> / 10</small></div>
+        </div>
+        <button class="btn small icon-btn" id="sound-game" onclick="toggleSound()" aria-label="소리 켜기/끄기">🔊</button>
+      </div>
+      <div class="stat-row">
+        <div class="card"><div class="mini-label">움직인 횟수</div><div class="big-num" id="g-moves">0</div></div>
+        <div class="card"><div class="mini-label">걸린 시간</div><div class="big-num" id="g-time">0:00</div></div>
+      </div>
+      <div class="card">
+        <div class="mini-label">받을 수 있는 최대 별</div>
+        <div class="goal"><span class="goal-stars" id="g-proj">★★★</span><span id="g-goal"></span></div>
+      </div>
+      <div class="btn-grid">
+        <button class="btn small" id="btn-undo" onclick="undoMove()">↩ 되돌리기</button>
+        <button class="btn small" onclick="resetStage()">🔄 처음부터</button>
+        <button class="btn small yellow" onclick="showHint()">💡 힌트</button>
+        <button class="btn small" onclick="openStages(currentTier)">🅿️ 목록</button>
+      </div>
+      <div class="hint-box" id="hint-box"></div>
+    </aside>
+    <div class="board-wrap" id="board-wrap">
+      <div class="board">
+        <div class="lot" id="lot">
+          <div class="cells" id="cells"></div>
+          <div class="cars" id="cars"></div>
+        </div>
+        <div class="exit" id="exit"><span class="exit-arrow">▶</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CLEAR MODAL ============ -->
+<div class="modal hidden" id="modal-clear">
+  <div class="modal-card">
+    <span class="badge" id="c-badge">초보 운전 · STAGE 1</span>
+    <h2 id="c-title">탈출 성공!</h2>
+    <div class="big-stars" id="c-stars"><span>★</span><span>★</span><span>★</span></div>
+    <p id="c-msg">완벽해요! 최소 이동으로 풀었어요.</p>
+    <div class="result-row">
+      <div class="card"><div class="mini-label">이번 이동</div><div class="big-num" id="c-moves">0번</div></div>
+      <div class="card"><div class="mini-label">걸린 시간</div><div class="big-num" id="c-time">0:00</div></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-clear');resetStage()">다시 하기</button>
+      <button class="btn go" id="c-next" onclick="nextStage()">다음 칸 ▶</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ RESET MODAL ============ -->
+<div class="modal hidden" id="modal-reset">
+  <div class="modal-card">
+    <div style="font-size:54px">🧹</div>
+    <h2>기록을 지울까요?</h2>
+    <p>이 기기에 저장된 별과 클리어 기록이 모두 사라져요.</p>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn" onclick="closeModal('modal-reset')">아니요</button>
+      <button class="btn red" onclick="resetAll()">지울래요</button>
+    </div>
+  </div>
+</div>
+
+<div id="gate" class="hidden waiting" aria-live="polite">
+  <div class="booth" aria-hidden="true"><div class="booth-house"><span>P</span></div><div class="barrier"><div class="arm"></div></div><div class="waiting-car"><span class="wc-eyes"><b></b><b></b></span></div></div>
+  <span class="gate-code" id="gate-room">교실</span>
+  <h1 id="gate-title">교실에 연결하고 있어요</h1>
+  <p id="gate-text">잠깐만 기다려 주세요.</p>
+  <span class="gate-note" id="gate-note"></span>
+</div>
+
+<section id="teacher" class="hidden">
+  <div class="t-wrap">
+    <div class="t-top"><span class="t-brand"><i></i>러시아워 교실</span><a class="btn small" id="t-preview" target="_blank" rel="noopener">학생 화면 열기 ↗</a></div>
+    <div id="t-pin" class="sheet pin-box hidden">
+      <div style="font-size:54px">🔑</div><h2>선생님 비밀번호</h2>
+      <form onsubmit="event.preventDefault();checkPin()"><input id="pin-input" type="password" inputmode="numeric" autocomplete="off"><button class="btn yellow" style="width:100%">들어가기</button></form>
+      <p id="pin-msg" style="margin-top:10px"></p>
+    </div>
+    <div id="t-main" class="hidden">
+      <span class="kicker">TEACHER'S DESK</span>
+      <h1>퍼즐 시간의 시작과 끝,<br><mark>선생님 버튼 하나로.</mark></h1>
+      <div id="t-warn"></div>
+      <section class="sheet control is-closed" id="t-control">
+        <div class="signal" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+        <div>
+          <span class="state-tag" id="t-tag">● 지금 게임 닫힘</span>
+          <h2 id="t-title">학생 화면은 잠겨 있어요</h2>
+          <p id="t-text">학생들은 차단기 화면을 보고 기다려요.</p>
+        </div>
+        <button class="mega" id="t-btn" onclick="toggleOpen()"><span class="mega-icon" id="t-icon">▶</span><span id="t-label">게임 켜기</span></button>
+      </section>
+      <section class="sheet share">
+        <div>
+          <div class="lbl">교실 이름</div>
+          <div class="room-big" id="t-room">gangbuk</div>
+          <div class="share-actions"><button class="btn yellow" id="t-copy" onclick="copyLink()">학생용 링크 복사</button></div>
+          <input id="t-link" readonly onfocus="this.select()">
+        </div>
+        <div class="qr" id="t-qrbox"><img id="t-qr" alt="학생용 링크 QR 코드" onerror="document.getElementById('t-qrbox').style.display='none'"></div>
+      </section>
+      <p class="t-note">💡 이 화면을 닫아도 켜고 끈 상태는 그대로 유지돼요. 수업이 끝나면 꼭 ‘게임 끄기’를 눌러 주세요. 켜 둔 게임은 12시간 뒤 자동으로 꺼져요.</p>
+    </div>
+  </div>
+</section>
+<div class="confetti" id="confetti"></div>
+
+<script>
+const STAGE_DATA = {"easy":[[{"id":"T","r":2,"c":1,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":2,"len":2,"dir":"V","color":"lime"},{"id":"B","r":1,"c":3,"len":3,"dir":"H","color":"yellow"},{"id":"C","r":2,"c":4,"len":2,"dir":"V","color":"purple"},{"id":"D","r":4,"c":4,"len":2,"dir":"V","color":"blue"}],[{"id":"T","r":2,"c":1,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":4,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":3,"c":3,"len":3,"dir":"H","color":"orange"},{"id":"C","r":3,"c":2,"len":2,"dir":"V","color":"lime"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":5,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":3,"c":0,"len":3,"dir":"V","color":"orange"},{"id":"C","r":3,"c":1,"len":2,"dir":"H","color":"lime"},{"id":"D","r":3,"c":3,"len":3,"dir":"H","color":"amber"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":3,"dir":"H","color":"yellow"},{"id":"B","r":1,"c":2,"len":2,"dir":"V","color":"pink"},{"id":"C","r":3,"c":2,"len":3,"dir":"V","color":"amber"},{"id":"D","r":0,"c":5,"len":2,"dir":"V","color":"lime"},{"id":"E","r":2,"c":5,"len":3,"dir":"V","color":"orange"},{"id":"F","r":5,"c":4,"len":2,"dir":"H","color":"purple"}],[{"id":"T","r":2,"c":3,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":3,"len":2,"dir":"V","color":"lime"},{"id":"B","r":0,"c":5,"len":3,"dir":"V","color":"yellow"},{"id":"C","r":3,"c":3,"len":2,"dir":"V","color":"pink"},{"id":"D","r":4,"c":4,"len":2,"dir":"H","color":"blue"}],[{"id":"T","r":2,"c":3,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":5,"len":2,"dir":"V","color":"lime"},{"id":"B","r":2,"c":5,"len":2,"dir":"V","color":"pink"},{"id":"C","r":3,"c":3,"len":3,"dir":"V","color":"yellow"},{"id":"D","r":4,"c":4,"len":2,"dir":"H","color":"blue"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":2,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":3,"c":0,"len":3,"dir":"H","color":"amber"},{"id":"C","r":4,"c":0,"len":3,"dir":"H","color":"orange"},{"id":"D","r":2,"c":5,"len":3,"dir":"V","color":"coral"},{"id":"E","r":5,"c":4,"len":2,"dir":"H","color":"silver"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":2,"len":2,"dir":"V","color":"lime"},{"id":"B","r":2,"c":2,"len":2,"dir":"V","color":"pink"},{"id":"C","r":4,"c":2,"len":3,"dir":"H","color":"orange"},{"id":"D","r":3,"c":5,"len":3,"dir":"V","color":"yellow"}],[{"id":"T","r":2,"c":3,"len":2,"dir":"H","color":"red"},{"id":"A","r":3,"c":0,"len":3,"dir":"H","color":"orange"},{"id":"B","r":4,"c":2,"len":2,"dir":"V","color":"pink"},{"id":"C","r":3,"c":4,"len":2,"dir":"V","color":"blue"},{"id":"D","r":2,"c":5,"len":3,"dir":"V","color":"yellow"},{"id":"E","r":5,"c":3,"len":3,"dir":"H","color":"amber"}],[{"id":"T","r":2,"c":1,"len":2,"dir":"H","color":"red"},{"id":"A","r":1,"c":0,"len":2,"dir":"V","color":"pink"},{"id":"B","r":0,"c":2,"len":2,"dir":"H","color":"lime"},{"id":"C","r":1,"c":3,"len":3,"dir":"V","color":"yellow"},{"id":"D","r":0,"c":4,"len":3,"dir":"V","color":"amber"},{"id":"E","r":1,"c":5,"len":3,"dir":"V","color":"orange"},{"id":"F","r":4,"c":2,"len":2,"dir":"V","color":"blue"},{"id":"G","r":4,"c":4,"len":2,"dir":"H","color":"silver"},{"id":"H","r":5,"c":3,"len":3,"dir":"H","color":"coral"}]],"medium":[[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":1,"len":3,"dir":"H","color":"yellow"},{"id":"B","r":0,"c":4,"len":2,"dir":"H","color":"lime"},{"id":"C","r":1,"c":4,"len":2,"dir":"H","color":"pink"},{"id":"D","r":2,"c":2,"len":2,"dir":"V","color":"blue"},{"id":"E","r":4,"c":0,"len":3,"dir":"H","color":"orange"},{"id":"F","r":2,"c":5,"len":2,"dir":"V","color":"silver"},{"id":"G","r":4,"c":5,"len":2,"dir":"V","color":"purple"}],[{"id":"T","r":2,"c":3,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":2,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":0,"c":4,"len":2,"dir":"V","color":"lime"},{"id":"C","r":1,"c":5,"len":3,"dir":"V","color":"orange"},{"id":"D","r":3,"c":3,"len":3,"dir":"V","color":"amber"},{"id":"E","r":4,"c":4,"len":2,"dir":"H","color":"purple"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":2,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":4,"c":0,"len":3,"dir":"H","color":"amber"},{"id":"C","r":3,"c":5,"len":3,"dir":"V","color":"orange"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":1,"len":2,"dir":"V","color":"lime"},{"id":"B","r":0,"c":2,"len":2,"dir":"H","color":"pink"},{"id":"C","r":1,"c":2,"len":2,"dir":"H","color":"blue"},{"id":"D","r":0,"c":4,"len":3,"dir":"V","color":"yellow"},{"id":"E","r":1,"c":5,"len":2,"dir":"V","color":"silver"},{"id":"F","r":2,"c":2,"len":3,"dir":"V","color":"orange"},{"id":"G","r":3,"c":3,"len":2,"dir":"H","color":"purple"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":3,"len":2,"dir":"V","color":"silver"},{"id":"B","r":2,"c":3,"len":2,"dir":"V","color":"pink"},{"id":"D","r":3,"c":4,"len":3,"dir":"V","color":"amber"},{"id":"E","r":4,"c":1,"len":2,"dir":"V","color":"purple"},{"id":"F","r":4,"c":2,"len":2,"dir":"H","color":"teal"}],[{"id":"T","r":2,"c":2,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":1,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":0,"c":2,"len":2,"dir":"H","color":"lime"},{"id":"C","r":0,"c":4,"len":3,"dir":"V","color":"orange"},{"id":"D","r":4,"c":3,"len":3,"dir":"H","color":"amber"},{"id":"E","r":4,"c":2,"len":2,"dir":"V","color":"pink"}],[{"id":"T","r":2,"c":1,"len":2,"dir":"H","color":"red"},{"id":"A","r":2,"c":0,"len":2,"dir":"V","color":"lime"},{"id":"B","r":4,"c":0,"len":2,"dir":"V","color":"blue"},{"id":"C","r":4,"c":2,"len":2,"dir":"V","color":"silver"},{"id":"D","r":2,"c":3,"len":3,"dir":"V","color":"orange"},{"id":"E","r":2,"c":4,"len":2,"dir":"V","color":"pink"},{"id":"F","r":0,"c":5,"len":3,"dir":"V","color":"yellow"},{"id":"G","r":4,"c":4,"len":2,"dir":"H","color":"purple"},{"id":"H","r":5,"c":3,"len":3,"dir":"H","color":"amber"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":3,"dir":"H","color":"yellow"},{"id":"B","r":0,"c":3,"len":3,"dir":"V","color":"orange"},{"id":"C","r":3,"c":1,"len":2,"dir":"V","color":"lime"},{"id":"D","r":4,"c":2,"len":2,"dir":"H","color":"pink"},{"id":"E","r":3,"c":5,"len":3,"dir":"V","color":"amber"}],[{"id":"T","r":2,"c":3,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":2,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":0,"c":5,"len":3,"dir":"V","color":"orange"},{"id":"C","r":4,"c":3,"len":2,"dir":"V","color":"lime"},{"id":"D","r":4,"c":4,"len":2,"dir":"H","color":"pink"},{"id":"E","r":5,"c":0,"len":3,"dir":"H","color":"amber"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":3,"dir":"H","color":"yellow"},{"id":"B","r":0,"c":3,"len":2,"dir":"V","color":"lime"},{"id":"C","r":0,"c":5,"len":2,"dir":"V","color":"amber"},{"id":"D","r":3,"c":0,"len":3,"dir":"V","color":"orange"},{"id":"E","r":2,"c":2,"len":2,"dir":"V","color":"blue"},{"id":"F","r":4,"c":1,"len":3,"dir":"H","color":"coral"},{"id":"G","r":4,"c":4,"len":2,"dir":"H","color":"silver"}]],"hard":[[{"id":"T","r":2,"c":1,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":3,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":2,"c":4,"len":3,"dir":"V","color":"orange"},{"id":"C","r":4,"c":0,"len":2,"dir":"V","color":"lime"},{"id":"D","r":4,"c":1,"len":2,"dir":"V","color":"pink"},{"id":"E","r":4,"c":2,"len":2,"dir":"H","color":"silver"},{"id":"F","r":5,"c":2,"len":3,"dir":"H","color":"amber"}],[{"id":"T","r":2,"c":2,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":1,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":3,"c":0,"len":3,"dir":"H","color":"amber"},{"id":"C","r":4,"c":2,"len":2,"dir":"V","color":"purple"},{"id":"D","r":5,"c":0,"len":2,"dir":"H","color":"pink"},{"id":"E","r":2,"c":4,"len":3,"dir":"V","color":"orange"},{"id":"F","r":5,"c":3,"len":2,"dir":"H","color":"blue"}],[{"id":"T","r":2,"c":2,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":2,"len":2,"dir":"V","color":"lime"},{"id":"B","r":3,"c":2,"len":2,"dir":"V","color":"pink"},{"id":"C","r":0,"c":4,"len":3,"dir":"V","color":"yellow"},{"id":"D","r":3,"c":3,"len":2,"dir":"H","color":"blue"},{"id":"E","r":4,"c":3,"len":2,"dir":"V","color":"amber"},{"id":"F","r":4,"c":4,"len":2,"dir":"H","color":"purple"},{"id":"G","r":5,"c":0,"len":3,"dir":"H","color":"orange"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":3,"dir":"H","color":"yellow"},{"id":"B","r":0,"c":4,"len":2,"dir":"V","color":"lime"},{"id":"C","r":0,"c":5,"len":2,"dir":"V","color":"pink"},{"id":"E","r":3,"c":0,"len":2,"dir":"V","color":"silver"},{"id":"F","r":2,"c":2,"len":2,"dir":"V","color":"blue"},{"id":"G","r":4,"c":1,"len":2,"dir":"H","color":"purple"},{"id":"H","r":4,"c":3,"len":3,"dir":"H","color":"orange"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":3,"dir":"H","color":"yellow"},{"id":"B","r":0,"c":3,"len":2,"dir":"V","color":"lime"},{"id":"C","r":4,"c":4,"len":2,"dir":"V","color":"amber"},{"id":"D","r":1,"c":2,"len":3,"dir":"V","color":"orange"},{"id":"E","r":3,"c":3,"len":2,"dir":"H","color":"silver"},{"id":"F","r":2,"c":5,"len":2,"dir":"V","color":"blue"},{"id":"G","r":4,"c":5,"len":2,"dir":"V","color":"coral"},{"id":"H","r":4,"c":0,"len":3,"dir":"H","color":"gold"},{"id":"I","r":5,"c":1,"len":2,"dir":"H","color":"teal"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":2,"dir":"V","color":"lime"},{"id":"B","r":0,"c":1,"len":2,"dir":"H","color":"pink"},{"id":"C","r":0,"c":3,"len":2,"dir":"V","color":"blue"},{"id":"D","r":0,"c":4,"len":2,"dir":"V","color":"silver"},{"id":"E","r":1,"c":2,"len":2,"dir":"V","color":"purple"},{"id":"F","r":3,"c":0,"len":3,"dir":"H","color":"yellow"},{"id":"G","r":2,"c":4,"len":3,"dir":"V","color":"amber"},{"id":"H","r":1,"c":5,"len":3,"dir":"V","color":"orange"},{"id":"I","r":4,"c":1,"len":2,"dir":"V","color":"teal"},{"id":"J","r":4,"c":2,"len":2,"dir":"H","color":"cyan"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":2,"dir":"V","color":"lime"},{"id":"B","r":0,"c":2,"len":2,"dir":"V","color":"pink"},{"id":"C","r":0,"c":3,"len":2,"dir":"V","color":"yellow"},{"id":"D","r":0,"c":4,"len":2,"dir":"H","color":"silver"},{"id":"E","r":2,"c":2,"len":3,"dir":"V","color":"amber"},{"id":"F","r":2,"c":3,"len":3,"dir":"V","color":"orange"},{"id":"H","r":2,"c":5,"len":2,"dir":"V","color":"purple"},{"id":"I","r":4,"c":5,"len":2,"dir":"V","color":"teal"},{"id":"J","r":5,"c":1,"len":2,"dir":"H","color":"cyan"},{"id":"K","r":5,"c":3,"len":2,"dir":"H","color":"coral"}],[{"id":"T","r":2,"c":3,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":2,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":0,"c":4,"len":2,"dir":"V","color":"lime"},{"id":"C","r":1,"c":5,"len":3,"dir":"V","color":"orange"},{"id":"D","r":3,"c":1,"len":2,"dir":"H","color":"pink"},{"id":"E","r":3,"c":3,"len":3,"dir":"V","color":"amber"},{"id":"F","r":4,"c":0,"len":2,"dir":"V","color":"blue"},{"id":"G","r":4,"c":1,"len":2,"dir":"V","color":"silver"},{"id":"H","r":4,"c":4,"len":2,"dir":"H","color":"purple"}],[{"id":"T","r":2,"c":1,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":2,"dir":"H","color":"lime"},{"id":"B","r":0,"c":2,"len":2,"dir":"V","color":"pink"},{"id":"C","r":0,"c":3,"len":3,"dir":"V","color":"yellow"},{"id":"D","r":4,"c":0,"len":2,"dir":"V","color":"silver"},{"id":"E","r":4,"c":1,"len":2,"dir":"V","color":"purple"},{"id":"F","r":4,"c":2,"len":2,"dir":"H","color":"teal"},{"id":"G","r":3,"c":4,"len":2,"dir":"V","color":"blue"},{"id":"H","r":3,"c":5,"len":3,"dir":"V","color":"orange"},{"id":"I","r":5,"c":2,"len":3,"dir":"H","color":"amber"}],[{"id":"T","r":2,"c":2,"len":2,"dir":"H","color":"red"},{"id":"A","r":3,"c":0,"len":2,"dir":"H","color":"lime"},{"id":"B","r":4,"c":0,"len":2,"dir":"V","color":"pink"},{"id":"C","r":3,"c":2,"len":3,"dir":"V","color":"orange"},{"id":"D","r":2,"c":4,"len":3,"dir":"V","color":"yellow"},{"id":"E","r":5,"c":4,"len":2,"dir":"H","color":"amber"}]],"superhard":[[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":1,"len":2,"dir":"H","color":"pink"},{"id":"B","r":1,"c":1,"len":2,"dir":"H","color":"blue"},{"id":"C","r":0,"c":3,"len":3,"dir":"V","color":"yellow"},{"id":"D","r":4,"c":0,"len":2,"dir":"H","color":"amber"},{"id":"E","r":5,"c":0,"len":2,"dir":"H","color":"lime"},{"id":"F","r":4,"c":2,"len":2,"dir":"V","color":"teal"},{"id":"G","r":3,"c":3,"len":2,"dir":"H","color":"purple"},{"id":"H","r":3,"c":5,"len":3,"dir":"V","color":"orange"},{"id":"I","r":0,"c":0,"len":2,"dir":"V","color":"green"},{"id":"J","r":2,"c":2,"len":2,"dir":"V","color":"grey"},{"id":"K","r":4,"c":4,"len":2,"dir":"V","color":"brown"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":3,"dir":"H","color":"yellow"},{"id":"B","r":0,"c":3,"len":2,"dir":"H","color":"pink"},{"id":"C","r":0,"c":5,"len":2,"dir":"V","color":"purple"},{"id":"D","r":1,"c":2,"len":3,"dir":"V","color":"orange"},{"id":"E","r":2,"c":3,"len":3,"dir":"V","color":"amber"},{"id":"F","r":4,"c":0,"len":2,"dir":"V","color":"silver"},{"id":"G","r":4,"c":1,"len":2,"dir":"H","color":"indigo"},{"id":"H","r":5,"c":1,"len":2,"dir":"H","color":"cyan"},{"id":"I","r":3,"c":4,"len":2,"dir":"V","color":"blue"},{"id":"J","r":4,"c":5,"len":2,"dir":"V","color":"lime"},{"id":"K","r":5,"c":3,"len":2,"dir":"H","color":"brown"}],[{"id":"T","r":2,"c":2,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":2,"len":2,"dir":"V","color":"lime"},{"id":"B","r":0,"c":4,"len":2,"dir":"H","color":"pink"},{"id":"C","r":1,"c":4,"len":2,"dir":"V","color":"blue"},{"id":"D","r":2,"c":1,"len":2,"dir":"V","color":"silver"},{"id":"E","r":3,"c":4,"len":2,"dir":"H","color":"purple"},{"id":"F","r":4,"c":0,"len":3,"dir":"H","color":"yellow"},{"id":"G","r":4,"c":4,"len":2,"dir":"V","color":"teal"},{"id":"H","r":4,"c":5,"len":2,"dir":"V","color":"cyan"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":2,"dir":"V","color":"lime"},{"id":"B","r":0,"c":1,"len":3,"dir":"H","color":"yellow"},{"id":"C","r":1,"c":1,"len":3,"dir":"H","color":"orange"},{"id":"D","r":1,"c":5,"len":3,"dir":"V","color":"amber"},{"id":"E","r":2,"c":2,"len":2,"dir":"V","color":"pink"},{"id":"F","r":2,"c":3,"len":2,"dir":"V","color":"blue"},{"id":"G","r":4,"c":3,"len":2,"dir":"V","color":"silver"},{"id":"H","r":4,"c":4,"len":2,"dir":"H","color":"teal"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":2,"dir":"V","color":"lime"},{"id":"B","r":0,"c":1,"len":3,"dir":"H","color":"yellow"},{"id":"C","r":0,"c":5,"len":2,"dir":"V","color":"pink"},{"id":"D","r":2,"c":5,"len":2,"dir":"V","color":"purple"},{"id":"E","r":1,"c":2,"len":2,"dir":"V","color":"blue"},{"id":"F","r":1,"c":3,"len":2,"dir":"V","color":"silver"},{"id":"G","r":3,"c":1,"len":2,"dir":"H","color":"teal"},{"id":"H","r":3,"c":3,"len":2,"dir":"V","color":"cyan"},{"id":"I","r":4,"c":4,"len":2,"dir":"H","color":"amber"}],[{"id":"T","r":2,"c":1,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":2,"dir":"H","color":"yellow"},{"id":"B","r":1,"c":0,"len":3,"dir":"V","color":"orange"},{"id":"C","r":0,"c":2,"len":2,"dir":"V","color":"pink"},{"id":"D","r":0,"c":3,"len":3,"dir":"V","color":"amber"},{"id":"E","r":3,"c":3,"len":3,"dir":"H","color":"gold"},{"id":"F","r":5,"c":0,"len":2,"dir":"H","color":"purple"},{"id":"G","r":4,"c":4,"len":2,"dir":"V","color":"blue"},{"id":"H","r":4,"c":5,"len":2,"dir":"V","color":"silver"},{"id":"I","r":4,"c":0,"len":3,"dir":"H","color":"grey"}],[{"id":"T","r":2,"c":0,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":3,"dir":"H","color":"yellow"},{"id":"B","r":0,"c":3,"len":2,"dir":"H","color":"lime"},{"id":"C","r":0,"c":5,"len":2,"dir":"V","color":"pink"},{"id":"D","r":1,"c":3,"len":2,"dir":"H","color":"silver"},{"id":"E","r":3,"c":0,"len":2,"dir":"V","color":"amber"},{"id":"F","r":1,"c":2,"len":2,"dir":"V","color":"blue"},{"id":"H","r":3,"c":3,"len":2,"dir":"V","color":"cyan"},{"id":"I","r":4,"c":1,"len":2,"dir":"H","color":"teal"},{"id":"J","r":2,"c":4,"len":3,"dir":"V","color":"orange"},{"id":"K","r":2,"c":5,"len":3,"dir":"V","color":"gold"},{"id":"L","r":5,"c":1,"len":3,"dir":"H","color":"coral"}],[{"id":"T","r":2,"c":1,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":3,"dir":"V","color":"yellow"},{"id":"B","r":0,"c":3,"len":2,"dir":"V","color":"lime"},{"id":"C","r":0,"c":4,"len":2,"dir":"H","color":"amber"},{"id":"D","r":2,"c":3,"len":2,"dir":"V","color":"blue"},{"id":"E","r":3,"c":0,"len":3,"dir":"H","color":"orange"},{"id":"F","r":4,"c":2,"len":2,"dir":"V","color":"silver"},{"id":"G","r":4,"c":3,"len":2,"dir":"H","color":"purple"},{"id":"H","r":3,"c":5,"len":3,"dir":"V","color":"gold"}],[{"id":"T","r":2,"c":2,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":2,"dir":"H","color":"lime"},{"id":"B","r":1,"c":0,"len":2,"dir":"V","color":"pink"},{"id":"C","r":0,"c":3,"len":2,"dir":"V","color":"purple"},{"id":"D","r":0,"c":4,"len":3,"dir":"V","color":"yellow"},{"id":"E","r":2,"c":5,"len":2,"dir":"V","color":"indigo"},{"id":"F","r":0,"c":5,"len":2,"dir":"V","color":"blue"},{"id":"G","r":3,"c":2,"len":2,"dir":"H","color":"teal"},{"id":"H","r":4,"c":0,"len":2,"dir":"H","color":"silver"},{"id":"I","r":4,"c":2,"len":2,"dir":"V","color":"amber"},{"id":"J","r":5,"c":3,"len":2,"dir":"H","color":"gold"},{"id":"K","r":4,"c":4,"len":2,"dir":"H","color":"grey"}],[{"id":"T","r":2,"c":3,"len":2,"dir":"H","color":"red"},{"id":"A","r":0,"c":0,"len":2,"dir":"H","color":"lime"},{"id":"B","r":1,"c":0,"len":2,"dir":"V","color":"blue"},{"id":"C","r":0,"c":4,"len":2,"dir":"V","color":"yellow"},{"id":"D","r":0,"c":5,"len":3,"dir":"V","color":"amber"},{"id":"E","r":3,"c":0,"len":3,"dir":"V","color":"orange"},{"id":"F","r":4,"c":1,"len":2,"dir":"H","color":"teal"},{"id":"G","r":3,"c":3,"len":2,"dir":"V","color":"purple"},{"id":"H","r":4,"c":4,"len":2,"dir":"H","color":"silver"},{"id":"I","r":5,"c":3,"len":3,"dir":"H","color":"gold"},{"id":"J","r":5,"c":1,"len":2,"dir":"H","color":"grey"},{"id":"K","r":1,"c":1,"len":2,"dir":"V","color":"brown"}]]};
+const OPTIMAL = {"easy":[5,4,6,10,6,6,11,8,9,10],"medium":[12,9,8,12,11,9,11,12,11,13],"hard":[14,15,12,13,18,16,16,21,20,14],"superhard":[18,25,23,27,30,28,24,21,25,25]};
+const TIERS = {
+  easy:      {key:'easy',      lv:'LEVEL 1', emoji:'🐣', name:'초보 운전',     desc:'차 몇 대만 비키면 길이 보여요. 몸풀기부터!', c:'#3ddc97', deep:'#1f9d6a'},
+  medium:    {key:'medium',    lv:'LEVEL 2', emoji:'🚕', name:'동네 기사님',   desc:'트럭이 끼어들기 시작해요. 순서를 잘 생각해요.', c:'#ffd23f', deep:'#c79a00'},
+  hard:      {key:'hard',      lv:'LEVEL 3', emoji:'🚌', name:'베테랑 드라이버', desc:'한 칸의 빈자리가 소중해요. 머릿속으로 미리 움직여 봐요.', c:'#4cc9f0', deep:'#1b8db3'},
+  superhard: {key:'superhard', lv:'LEVEL 4', emoji:'🏎️', name:'전설의 레이서', desc:'꽉 막힌 퇴근길 주차장! 진짜 고수만 탈출해요.', c:'#ff7eb6', deep:'#d43f83'}
+};
+const TIER_KEYS = Object.keys(TIERS);
+const COLORS = {
+  red:['#ff4d4d','빨간'], yellow:['#ffd23f','노란'], amber:['#ffb020','귤색'], gold:['#f2c14e','금색'],
+  orange:['#ff8c42','주황'], coral:['#ff6f61','산호색'], lime:['#a5e65a','연두'], green:['#3ddc84','초록'],
+  teal:['#2ec4b6','청록'], cyan:['#4cc9f0','하늘색'], blue:['#4d7cfe','파란'], indigo:['#6c63ff','남색'],
+  purple:['#a66cff','보라'], pink:['#ff7eb6','분홍'], silver:['#d3d9e2','은색'], grey:['#9aa5b1','회색'], brown:['#b07d62','갈색']
+};
+const STORE = 'rh_classroom_v4';
+let records = {easy:{},medium:{},hard:{},superhard:{}};
+let sound = true;
+let currentTier = 'easy', currentStage = 0;
+let vehicles = [], selectedId = 'T', moveHist = [], moves = 0, seconds = 0, hinted = false;
+let clearing = false, drag = null, timer = null, autoMode = false, backtick = false;
+
+const $ = id => document.getElementById(id);
+/* ---------- 교실 스위치 (선생님이 켜고 끄기) ---------- */
+const CONFIG = (typeof CLASSROOM_CONFIG !== 'undefined' && CLASSROOM_CONFIG) || {};
+const params = new URLSearchParams(location.search);
+const IS_TEACHER = params.has('teacher');
+const ROOM = ((params.get('room') || CONFIG.room || 'class') + '').replace(/[.#$\[\]\/\s]/g, '').slice(0, 40) || 'class';
+const MAX_OPEN_MS = 12 * 60 * 60 * 1000;
+const live = {open:false, openedAt:0, connected:false, loaded:false, error:'', mode:'', busy:false};
+let serverOffset = 0, backend = null;
+function isOpenNow(){return live.loaded && live.connected && live.open && (!live.openedAt || Date.now() + serverOffset - live.openedAt < MAX_OPEN_MS)}
+const canPlay = () => !IS_TEACHER && isOpenNow();
+window.classroomCanPlay = canPlay;
+
+/* ---------- storage ---------- */
+function load(){try{const r=JSON.parse(localStorage.getItem(STORE)||'null');if(r)TIER_KEYS.forEach(k=>{if(r[k])records[k]=r[k]});sound=localStorage.getItem(STORE+'_sound')!=='off';}catch(e){}}
+function save(){try{localStorage.setItem(STORE,JSON.stringify(records))}catch(e){}}
+function tierStars(k){return Object.values(records[k]||{}).reduce((s,r)=>s+(r.stars||0),0)}
+function tierCleared(k){return Object.values(records[k]||{}).filter(r=>r.cleared).length}
+function isUnlocked(k,i){return i===0||Boolean(records[k]?.[i-1]?.cleared)||Boolean(records[k]?.[i]?.cleared)}
+function fmt(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+function starsFor(m,opt,usedHint){let s=m<=opt?3:m<=Math.ceil(opt*1.5)?2:1;if(usedHint)s=Math.min(s,2);return s}
+
+/* ---------- sound ---------- */
+let actx=null;
+function beep(f,d=.08,type='square',vol=.05,delay=0){
+  if(!sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const t=actx.currentTime+delay;
+  const o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(actx.destination);o.start(t);o.stop(t+d)}catch(e){}
+}
+function toggleSound(){sound=!sound;try{localStorage.setItem(STORE+'_sound',sound?'on':'off')}catch(e){}paintSound();if(sound)beep(660)}
+function paintSound(){['sound-home','sound-game'].forEach(id=>$(id).textContent=sound?'🔊':'🔇')}
+
+/* ---------- theme / screens ---------- */
+function applyTier(k){const t=TIERS[k];document.documentElement.style.setProperty('--tier',t.c);document.documentElement.style.setProperty('--tier-deep',t.deep)}
+function show(id){['screen-home','screen-stages','screen-game'].forEach(s=>$(s).classList.toggle('hidden',s!==id))}
+function openModal(id){$(id).classList.remove('hidden')}
+function closeModal(id){$(id).classList.add('hidden')}
+
+function goHome(){stopTimer();clearing=false;closeModal('modal-clear');renderHome();show('screen-home')}
+function renderHome(){
+  $('home-stars').textContent=TIER_KEYS.reduce((s,k)=>s+tierStars(k),0);
+  const box=$('tiers');box.innerHTML='';
+  TIER_KEYS.forEach(k=>{
+    const t=TIERS[k],done=tierCleared(k),st=tierStars(k);
+    const b=document.createElement('button');b.className='tier-card';b.style.setProperty('--c',t.c);
+    b.innerHTML=`<span class="tier-level">${t.lv}</span><span class="tier-emoji">${t.emoji}</span><span class="tier-name">${t.name}</span><span class="tier-desc">${t.desc}</span>
+      <span class="tier-progress">${Array.from({length:10},(_,i)=>`<i class="${records[k][i]?.cleared?'on':''}"></i>`).join('')}</span>
+      <span class="tier-foot"><span>★ ${st}<small style="opacity:.55">/30</small></span><span class="tier-go">${done===10?'다시 도전':done?'이어서 ▶':'출발 ▶'}</span></span>`;
+    b.onclick=()=>{beep(520);openStages(k)};box.appendChild(b);
+  });
+}
+function openStages(k){
+  stopTimer();clearing=false;closeModal('modal-clear');currentTier=k;applyTier(k);
+  const t=TIERS[k];$('st-emoji').textContent=t.emoji;$('st-name').textContent=t.name;$('st-stars').textContent=tierStars(k);
+  const box=$('spots');box.innerHTML='';
+  let next=-1;for(let i=0;i<10;i++){if(!records[k][i]?.cleared){next=i;break}}
+  for(let i=0;i<10;i++){
+    const r=records[k][i],un=isUnlocked(k,i);
+    const b=document.createElement('button');
+    b.className='spot'+(r?.cleared?' cleared':'')+(i===next?' next':'')+(un?'':' locked');
+    const s=r?.stars||0;
+    b.innerHTML=`<span class="p">${un?'P':'🔒'}</span><span class="n">${i+1}</span><span class="s"><b>${'★'.repeat(s)}</b>${'★'.repeat(3-s)}</span>`;
+    b.onclick=()=>{if(!canPlay())return;beep(600);startStage(k,i)};
+    box.appendChild(b);
+  }
+  show('screen-stages');
+}
+
+/* ---------- board ---------- */
+function buildCells(){
+  const c=$('cells');c.innerHTML='';
+  for(let r=0;r<6;r++)for(let col=0;col<6;col++){const d=document.createElement('div');d.addEventListener('pointerdown',()=>tapCell(r,col));c.appendChild(d)}
+}
+function sizeBoard(){
+  const lot=$('lot');const w=lot.clientWidth;if(!w)return;
+  const cell=w/6;document.documentElement.style.setProperty('--cell',cell+'px');
+  const ex=$('exit');ex.style.top=(lot.offsetTop+cell*2+3)+'px';ex.style.height=(cell)+'px';
+}
+function startStage(k,i){
+  if(!canPlay())return;
+  stopTimer();currentTier=k;currentStage=i;applyTier(k);
+  vehicles=STAGE_DATA[k][i].map(v=>({...v}));selectedId='T';moveHist=[];moves=0;seconds=0;hinted=false;clearing=false;autoMode=false;
+  const t=TIERS[k];$('g-tier').textContent=t.emoji+' '+t.name;$('g-stage').textContent=i+1;$('hint-box').textContent='';
+  show('screen-game');requestAnimationFrame(()=>{sizeBoard();drawCars(true)});drawCars(true);updateHud();startTimer();
+}
+function resetStage(){if(!canPlay()||clearing)return;startStage(currentTier,currentStage)}
+function nextStage(){closeModal('modal-clear');if(currentStage<9)startStage(currentTier,currentStage+1);else openStages(currentTier)}
+
+function carHTML(v){
+  const len=v.len,hero=v.id==='T';
+  const rot=v.dir==='V'?((v.id.charCodeAt(0)%2)?90:-90):((hero||(v.id.charCodeAt(0)%2))?0:180);
+  let inner='<i class="wh a"></i><i class="wh b"></i><i class="wh c"></i><i class="wh d"></i>';
+  if(hero) inner+='<div class="stripe"></div><div class="eyes"><b></b><b></b></div><span class="light t"></span><span class="light b"></span>';
+  else if(len===3) inner+='<div class="cargo"></div><div class="glass"></div><span class="light t"></span><span class="light b"></span>';
+  else inner+='<div class="rear"></div><div class="roof"></div><div class="glass"></div><span class="light t"></span><span class="light b"></span>';
+  return `<div class="rot" style="--rot:${rot}deg"><div class="body">${inner}</div></div>`;
+}
+function drawCars(full){
+  const layer=$('cars');
+  if(full){
+    layer.innerHTML='';
+    vehicles.forEach(v=>{
+      const el=document.createElement('div');el.id='car-'+v.id;
+      el.className='car '+v.dir+(v.id==='T'?' hero':'');
+      el.style.setProperty('--c',(COLORS[v.color]||COLORS.silver)[0]);el.style.setProperty('--len',v.len);
+      el.style.width=(v.dir==='H'?v.len:1)/6*100+'%';el.style.height=(v.dir==='V'?v.len:1)/6*100+'%';
+      el.innerHTML=carHTML(v);
+      el.addEventListener('pointerdown',e=>carDown(e,v.id));
+      layer.appendChild(el);
+    });
+  }
+  vehicles.forEach(v=>{const el=$('car-'+v.id);if(!el)return;el.style.left=v.c/6*100+'%';el.style.top=v.r/6*100+'%';el.classList.toggle('sel',v.id===selectedId)});
+}
+function grid(ex){const g=Array.from({length:6},()=>Array(6).fill(null));vehicles.forEach(v=>{if(v.id===ex)return;for(let i=0;i<v.len;i++)g[v.r+(v.dir==='V'?i:0)][v.c+(v.dir==='H'?i:0)]=v.id});return g}
+function range(v){
+  const g=grid(v.id);let lo=v.dir==='H'?v.c:v.r,hi=lo;
+  while(lo>0){const p=lo-1;if(g[v.dir==='V'?p:v.r][v.dir==='H'?p:v.c]===null)lo=p;else break}
+  while(hi+v.len<6){const p=hi+v.len;if(g[v.dir==='V'?p:v.r][v.dir==='H'?p:v.c]===null)hi++;else break}
+  return {lo,hi};
+}
+function select(id){if(clearing)return;selectedId=id;drawCars(false)}
+function commit(v,delta,silent){
+  if(!canPlay()||delta===0)return;
+  moveHist.push({id:v.id,r:v.r,c:v.c});
+  if(v.dir==='H')v.c+=delta;else v.r+=delta;
+  moves++;if(!silent)beep(320+Math.random()*60,.06,'triangle',.07);
+  $('hint-box').textContent='';document.querySelectorAll('.car.hint').forEach(e=>e.classList.remove('hint'));
+  drawCars(false);updateHud();checkWin();
+}
+function bump(v,dir){const el=$('car-'+v.id);if(!el)return;el.style.setProperty('--bx',v.dir==='H'?dir*6+'px':'0');el.style.setProperty('--by',v.dir==='V'?dir*6+'px':'0');el.classList.remove('bump');void el.offsetWidth;el.classList.add('bump');beep(140,.07,'sawtooth',.03)}
+function step(dir){
+  if(!canPlay()||clearing)return;const v=vehicles.find(x=>x.id===selectedId);if(!v)return;
+  const {lo,hi}=range(v),cur=v.dir==='H'?v.c:v.r,t=cur+dir;
+  if(t<lo||t>hi){bump(v,dir);return}commit(v,dir);
+}
+function tapCell(r,c){
+  if(!canPlay()||clearing)return;autoMode=false;const v=vehicles.find(x=>x.id===selectedId);if(!v)return;
+  const {lo,hi}=range(v);
+  if(v.dir==='H'&&v.r===r){let t=v.c;if(c<v.c)t=Math.max(lo,c);else if(c>=v.c+v.len)t=Math.min(hi,c-v.len+1);if(t!==v.c)commit(v,t-v.c)}
+  else if(v.dir==='V'&&v.c===c){let t=v.r;if(r<v.r)t=Math.max(lo,r);else if(r>=v.r+v.len)t=Math.min(hi,r-v.len+1);if(t!==v.r)commit(v,t-v.r)}
+}
+function carDown(e,id){
+  if(!canPlay()||clearing)return;autoMode=false;e.preventDefault();e.stopPropagation();
+  select(id);const v=vehicles.find(x=>x.id===id);if(!v)return;
+  const cell=$('lot').clientWidth/6,{lo,hi}=range(v),start=v.dir==='H'?v.c:v.r,el=$('car-'+id);
+  el.classList.add('dragging');
+  drag={v,el,x:e.clientX,y:e.clientY,cell,lo,hi,start,pos:start};
+  window.addEventListener('pointermove',dragMove,{passive:false});window.addEventListener('pointerup',dragUp);window.addEventListener('pointercancel',dragUp);
+}
+function dragMove(e){
+  if(!drag)return;e.preventDefault();
+  if(!canPlay()){dragUp();return}
+  const d=drag,dp=d.v.dir==='H'?e.clientX-d.x:e.clientY-d.y,p=Math.max(d.lo,Math.min(d.hi,d.start+dp/d.cell));d.pos=p;
+  if(d.v.dir==='H')d.el.style.left=p/6*100+'%';else d.el.style.top=p/6*100+'%';
+}
+function dragUp(e){
+  if(!drag)return;const d=drag;drag=null;d.el.classList.remove('dragging');
+  window.removeEventListener('pointermove',dragMove);window.removeEventListener('pointerup',dragUp);window.removeEventListener('pointercancel',dragUp);
+  let fin=Math.round(d.pos);
+  if(fin===d.start&&e&&e.clientX!==undefined){const dx=e.clientX-d.x,dy=e.clientY-d.y;
+    if(d.v.dir==='H'&&Math.abs(dx)>16&&Math.abs(dx)>Math.abs(dy))fin=Math.max(d.lo,Math.min(d.hi,d.start+Math.sign(dx)));
+    else if(d.v.dir==='V'&&Math.abs(dy)>16&&Math.abs(dy)>Math.abs(dx))fin=Math.max(d.lo,Math.min(d.hi,d.start+Math.sign(dy)));}
+  if(fin!==d.start&&canPlay())commit(d.v,fin-d.start);else drawCars(false);
+}
+function undoMove(){
+  if(!canPlay()||clearing||!moveHist.length)return;autoMode=false;
+  const h=moveHist.pop(),v=vehicles.find(x=>x.id===h.id);if(v){v.r=h.r;v.c=h.c;selectedId=v.id;moves=Math.max(0,moves-1)}
+  beep(260,.06,'triangle');drawCars(false);updateHud();
+}
+
+/* ---------- HUD & timer ---------- */
+function updateHud(){
+  const opt=OPTIMAL[currentTier][currentStage];
+  $('g-moves').textContent=moves;$('g-time').textContent=fmt(seconds);$('btn-undo').disabled=!moveHist.length||clearing;
+  const s=starsFor(moves,opt,hinted),two=Math.ceil(opt*1.5);
+  $('g-proj').innerHTML='<b>'+'★'.repeat(s)+'</b>'+'★'.repeat(3-s);
+  $('g-goal').textContent=hinted?'힌트 사용 · 최대 별 2개':`★3: ${opt}번 · ★2: ${two}번 이하`;
+}
+function startTimer(){stopTimer();timer=setInterval(()=>{if(canPlay()&&!clearing&&!$('screen-game').classList.contains('hidden')){seconds++;$('g-time').textContent=fmt(seconds)}},1000)}
+function stopTimer(){if(timer){clearInterval(timer);timer=null}}
+
+/* ---------- win ---------- */
+function checkWin(){
+  const t=vehicles.find(v=>v.id==='T');if(!t||t.c!==4||clearing)return;
+  clearing=true;stopTimer();
+  const opt=OPTIMAL[currentTier][currentStage],stars=starsFor(moves,opt,hinted);
+  if(!autoMode){
+    const prev=records[currentTier][currentStage]||{};
+    records[currentTier][currentStage]={cleared:true,stars:Math.max(prev.stars||0,stars),best:Math.min(prev.best??Infinity,moves),time:Math.min(prev.time??Infinity,seconds)};
+    save();
+  }
+  const el=$('car-T');if(el){el.classList.add('exiting');requestAnimationFrame(()=>el.style.left='118%')}
+  [523,659,784].forEach((f,i)=>beep(f,.12,'square',.05,i*.09));
+  setTimeout(()=>showClear(stars,opt),650);
+}
+function showClear(stars,opt){
+  const t=TIERS[currentTier],last=currentStage===9;
+  $('c-badge').textContent=`${t.emoji} ${t.name} · STAGE ${currentStage+1}`;
+  $('c-title').textContent=last?(tierCleared(currentTier)===10?'🏆 난이도 완주!':'탈출 성공!'):'탈출 성공!';
+  $('c-moves').textContent=moves+'번';$('c-time').textContent=fmt(seconds);
+  $('c-msg').textContent=autoMode?'자동 풀이로 탈출했어요. (기록은 저장되지 않아요)':
+    stars===3?(hinted?'':'완벽해요! 최소 이동으로 풀었어요. 🎉'):
+    hinted?`힌트 도움으로 탈출! 다음엔 혼자 ${opt}번에 도전!`:
+    `최소 ${opt}번이면 별 3개! 다시 도전해 볼까요?`;
+  if(stars===3&&hinted)$('c-msg').textContent='힌트를 써서 별은 2개까지예요.';
+  $('c-next').textContent=last?'목록으로 ▶':'다음 칸 ▶';
+  const ss=$('c-stars').children;[...ss].forEach((s,i)=>{s.className=(i<stars?'on':'');setTimeout(()=>{s.classList.add('show');if(i<stars)beep(880+i*120,.1,'square',.05)},250+i*260)});
+  openModal('modal-clear');confetti();
+}
+function confetti(){
+  const box=$('confetti'),cols=['#ff4d4d','#ffd23f','#3ddc97','#4cc9f0','#a66cff','#ff7eb6'];box.innerHTML='';
+  for(let i=0;i<70;i++){const p=document.createElement('i');p.style.left=Math.random()*100+'%';p.style.background=cols[i%cols.length];p.style.animationDuration=(1.6+Math.random()*1.6)+'s';p.style.animationDelay=(Math.random()*.4)+'s';p.style.transform=`rotate(${Math.random()*360}deg)`;box.appendChild(p)}
+  setTimeout(()=>box.innerHTML='',3800);
+}
+
+/* ---------- solver (hint + teacher demo) ---------- */
+function solve(start){
+  const key=s=>s.map(v=>v.r*6+v.c).join(',');
+  const seen=new Set([key(start)]);let q=[{s:start,first:null}];
+  while(q.length){const nq=[];
+    for(const {s,first} of q){
+      const t=s.find(v=>v.id==='T');if(t.c===4)return first||null;
+      const g=Array.from({length:6},()=>Array(6).fill(0));s.forEach(v=>{for(let i=0;i<v.len;i++)g[v.r+(v.dir==='V'?i:0)][v.c+(v.dir==='H'?i:0)]=1});
+      s.forEach((v,i)=>{for(const sg of[-1,1]){for(let k=1;k<6;k++){
+        const nr=v.r+(v.dir==='V'?sg*k:0),nc=v.c+(v.dir==='H'?sg*k:0);
+        if(nr<0||nc<0||(v.dir==='V'&&nr+v.len>6)||(v.dir==='H'&&nc+v.len>6))break;
+        const cr=sg>0?nr+(v.dir==='V'?v.len-1:0):nr,cc=sg>0?nc+(v.dir==='H'?v.len-1:0):nc;if(g[cr][cc])break;
+        const ns=s.map(o=>({...o}));ns[i].r=nr;ns[i].c=nc;const kk=key(ns);if(seen.has(kk))continue;seen.add(kk);
+        nq.push({s:ns,first:first||{id:v.id,delta:sg*k}});
+      }}});
+    }q=nq;}
+  return null;
+}
+function showHint(){
+  if(!canPlay()||clearing)return;
+  const m=solve(vehicles.map(v=>({...v})));
+  if(!m){$('hint-box').textContent='이미 출구가 열렸어요! 빨강이를 오른쪽으로 쭉!';return}
+  const v=vehicles.find(x=>x.id===m.id),name=(v.id==='T'?'빨강이':(COLORS[v.color]||COLORS.silver)[1]+' '+(v.len===3?'트럭':'자동차'));
+  const dirTxt=v.dir==='H'?(m.delta>0?'오른쪽 ▶':'◀ 왼쪽'):(m.delta>0?'아래 ▼':'위 ▲');
+  hinted=true;select(v.id);
+  document.querySelectorAll('.car.hint').forEach(e=>e.classList.remove('hint'));const el=$('car-'+v.id);void el.offsetWidth;el.classList.add('hint');
+  $('hint-box').textContent=`💡 ${name}을(를) ${dirTxt}으로 ${Math.abs(m.delta)}칸!`;beep(700,.12,'sine',.08);updateHud();
+}
+async function autoSolve(){
+  if(!canPlay()||clearing)return;autoMode=true;
+  while(autoMode&&!clearing&&canPlay()){
+    const m=solve(vehicles.map(v=>({...v})));if(!m)break;
+    const v=vehicles.find(x=>x.id===m.id);select(v.id);commit(v,m.delta,true);beep(400,.05,'triangle',.05);
+    await new Promise(r=>setTimeout(r,420));
+  }
+}
+
+/* ---------- keyboard ---------- */
+window.addEventListener('keydown',e=>{
+  if(e.key==='`')backtick=true;
+  if($('screen-game').classList.contains('hidden'))return;
+  if(!$('modal-clear').classList.contains('hidden')){if(e.key==='Enter'||e.key===' '){e.preventDefault();nextStage()}return}
+  if(backtick&&e.key==='Enter'){e.preventDefault();autoSolve();return}
+  if(clearing)return;
+  const k=e.key.toLowerCase();const map={arrowleft:-1,a:-1,arrowright:1,d:1,arrowup:-1,w:-1,arrowdown:1,s:1};
+  if(k in map){e.preventDefault();autoMode=false;const v=vehicles.find(x=>x.id===selectedId);if(!v)return;
+    const horiz=['arrowleft','a','arrowright','d'].includes(k);if((v.dir==='H')!==horiz)return;step(map[k])}
+  else if(k==='tab'){e.preventDefault();const i=vehicles.findIndex(v=>v.id===selectedId);select(vehicles[(i+(e.shiftKey?vehicles.length-1:1))%vehicles.length].id)}
+  else if(k==='z'&&(e.ctrlKey||e.metaKey)){e.preventDefault();undoMove()}
+});
+window.addEventListener('keyup',e=>{if(e.key==='`')backtick=false});
+
+/* ---------- 연결 ---------- */
+async function connect(){
+  const fb = CONFIG.firebase;
+  if (fb && fb.databaseURL) {
+    live.mode = 'firebase';
+    try {
+      const V = '10.12.2';
+      const appMod = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+      const dbMod = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-database.js`);
+      const app = appMod.initializeApp(fb, 'rushhour-classroom');
+      const db = dbMod.getDatabase(app);
+      const roomRef = dbMod.ref(db, 'rushhour/' + ROOM);
+      dbMod.onValue(dbMod.ref(db, '.info/connected'), s => { live.connected = s.val() === true; applyLive(); });
+      dbMod.onValue(dbMod.ref(db, '.info/serverTimeOffset'), s => { serverOffset = Number(s.val()) || 0; });
+      dbMod.onValue(roomRef, s => {
+        const v = s.val() || {};
+        live.open = v.open === true; live.openedAt = Number(v.openedAt) || 0; live.loaded = true; live.error = '';
+        applyLive();
+      }, err => { live.error = 'Firebase 데이터베이스를 읽을 권한이 없어요. 데이터베이스 규칙에서 rushhour 읽기/쓰기를 허용해 주세요. (' + err.message + ')'; applyLive(); });
+      backend = { set: open => dbMod.set(roomRef, { open, openedAt: open ? dbMod.serverTimestamp() : 0 }) };
+    } catch (e) {
+      live.error = 'Firebase에 연결하지 못했어요: ' + e.message; applyLive();
+    }
+  } else {
+    // 데모 모드: Firebase 설정이 없을 때. 같은 기기(같은 브라우저) 안에서만 켜고 꺼져요.
+    live.mode = 'demo';
+    const KEY = 'rh_demo_switch_' + ROOM;
+    const read = () => {
+      try { const v = JSON.parse(localStorage.getItem(KEY) || '{}'); live.open = v.open === true; live.openedAt = Number(v.openedAt) || 0; } catch (e) {}
+      live.loaded = true; live.connected = true; applyLive();
+    };
+    window.addEventListener('storage', e => { if (e.key === KEY) read(); });
+    backend = { set: async open => { localStorage.setItem(KEY, JSON.stringify({ open, openedAt: open ? Date.now() : 0 })); read(); } };
+    read();
+  }
+}
+
+/* ---------- 학생 화면에 반영 ---------- */
+let wasOpen = null;
+function applyLive(){
+  if (IS_TEACHER) { renderTeacher(); return; }
+  const open = canPlay();
+  const st = live.error ? 'error' : !live.loaded ? 'checking' : !live.connected ? 'offline' : open ? 'open' : 'closed';
+  const text = {
+    checking:['교실에 연결하고 있어요','잠깐만 기다려 주세요.','곧 연결돼요'],
+    offline:['인터넷 연결을 확인하고 있어요','연결이 확인될 때까지 게임을 잠시 멈춰요.','다시 연결되면 자동으로 이어져요'],
+    closed:['주차장 문이 닫혔어요','선생님이 문을 열면 게임이 자동으로 시작돼요.','지금은 선생님 말씀에 귀 기울여요 👂'],
+    error:['교실에 연결할 수 없어요', live.error, '선생님께 알려 주세요'],
+    open:['','','']
+  }[st];
+  $('gate').classList.toggle('hidden', open);
+  $('gate').classList.toggle('waiting', st === 'checking' || st === 'offline');
+  $('gate-title').textContent = text[0]; $('gate-text').textContent = text[1]; $('gate-note').textContent = text[2];
+  if (!open) { if (drag) dragUp(); autoMode = false; }
+  wasOpen = open;
+}
+
+/* ---------- 선생님 화면 ---------- */
+function studentLink(){
+  const base = location.origin + location.pathname;
+  return ROOM === ((CONFIG.room || 'class') + '').replace(/[.#$\[\]\/\s]/g, '') ? base : base + '?room=' + encodeURIComponent(ROOM);
+}
+function pinOk(){ try { return sessionStorage.getItem('rh_teacher_' + ROOM) === 'ok'; } catch (e) { return false; } }
+function checkPin(){
+  if ($('pin-input').value === String(CONFIG.teacherPin || '')) { try { sessionStorage.setItem('rh_teacher_' + ROOM, 'ok'); } catch (e) {} renderTeacher(); }
+  else { $('pin-msg').textContent = '비밀번호가 달라요.'; $('pin-input').value = ''; }
+}
+async function toggleOpen(){
+  if (!backend || live.busy) return;
+  live.busy = true; renderTeacher();
+  try { await backend.set(!isOpenNow()); }
+  catch (e) { live.error = '바꾸지 못했어요: ' + e.message; }
+  live.busy = false; renderTeacher();
+}
+async function copyLink(){
+  try { await navigator.clipboard.writeText(studentLink()); $('t-copy').textContent = '복사했어요 ✓'; setTimeout(() => $('t-copy').textContent = '학생용 링크 복사', 2000); }
+  catch (e) { $('t-link').focus(); }
+}
+let qrDone = '';
+function renderTeacher(){
+  const needPin = CONFIG.teacherPin && !pinOk();
+  $('t-pin').classList.toggle('hidden', !needPin);
+  $('t-main').classList.toggle('hidden', !!needPin);
+  $('t-preview').href = studentLink();
+  if (needPin) return;
+  const open = isOpenNow();
+  $('t-control').className = 'sheet control ' + (open ? 'is-open' : 'is-closed');
+  $('t-tag').textContent = open ? '● 지금 게임 열림' : '● 지금 게임 닫힘';
+  $('t-title').textContent = open ? '학생들이 퍼즐을 풀고 있어요' : '학생 화면은 잠겨 있어요';
+  $('t-text').textContent = open ? '‘게임 끄기’를 누르면 학생 화면이 바로 차단기 화면으로 바뀌고, 게임을 더 할 수 없어요.' : '학생들은 차단기 화면을 보고 기다려요. ‘게임 켜기’를 누르면 바로 시작돼요.';
+  $('t-icon').textContent = live.busy ? '…' : open ? '■' : '▶';
+  $('t-label').textContent = live.busy ? '바꾸는 중' : open ? '게임 끄기' : '게임 켜기';
+  $('t-btn').disabled = live.busy || !live.loaded || !live.connected || !!live.error;
+  $('t-room').textContent = ROOM;
+  const link = studentLink(); $('t-link').value = link;
+  if (qrDone !== link) { qrDone = link; $('t-qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=0&data=' + encodeURIComponent(link); }
+  let warn = '';
+  if (live.mode === 'demo') warn += '<div class="warn">⚠️ <b>데모 모드</b>예요. 아직 Firebase 설정이 비어 있어서, <b>이 컴퓨터 안에서만</b> 켜고 꺼져요. 학생 태블릿까지 조종하려면 index.html 맨 위 CLASSROOM_CONFIG 에 Firebase 설정을 넣어 주세요.</div>';
+  if (live.error) warn += '<div class="warn err">🚫 ' + live.error.replace(/</g, '&lt;') + '</div>';
+  else if (live.mode === 'firebase' && !live.connected) warn += '<div class="warn">📡 Firebase에 연결하는 중이에요…</div>';
+  $('t-warn').innerHTML = warn;
+}
+
+window.addEventListener('resize',()=>{sizeBoard()});
+window.onload=()=>{
+  $('gate-room').textContent = '교실 · ' + ROOM;
+  if (IS_TEACHER) {
+    ['screen-home','screen-stages','screen-game'].forEach(id => $(id).classList.add('hidden'));
+    $('teacher').classList.remove('hidden');
+    document.title = '러시아워 교실 — 선생님 화면';
+  } else {
+    load();paintSound();buildCells();renderHome();
+    if(window.ResizeObserver)new ResizeObserver(sizeBoard).observe($('lot'));
+  }
+  applyLive();
+  setInterval(applyLive, 1000);   // 12시간 자동 종료 확인
+  connect();
+};
+</script>
+</body>
+</html>
