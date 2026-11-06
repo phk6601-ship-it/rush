@@ -128,8 +128,6 @@ button:focus-visible{outline:4px solid var(--blue);outline-offset:3px}
 .goal-stars b{color:#f5b300;font-weight:400;text-shadow:0 2px 0 #0002}
 .btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .btn-grid .wide{grid-column:1/-1}
-.hint-box{font-size:14px;font-weight:800;line-height:1.45;background:#fff8c8;border:3px solid var(--ink);border-radius:14px;padding:10px 12px;min-height:44px}
-.hint-box:empty{display:none}
 
 .board-wrap{--size:min(calc(100dvh - 40px), calc(100vw - 330px), 640px);width:var(--size);height:var(--size);position:relative;flex-shrink:0}
 .board{position:absolute;inset:0;padding:calc(var(--size) * .035);background:var(--tier);border:4px solid var(--ink);border-radius:28px;box-shadow:0 8px 0 var(--ink), inset 0 0 0 6px #ffffff55}
@@ -165,8 +163,6 @@ button:focus-visible{outline:4px solid var(--blue);outline-offset:3px}
 .hero .body{background:var(--red)}
 .hero .stripe{position:absolute;left:8%;right:calc(10% + var(--cell) * .48);top:50%;height:calc(var(--cell) * .1);margin-top:calc(var(--cell) * -.05);background:#fff;border-radius:3px;opacity:.85}
 .car.sel .body{outline:4px solid #fff;outline-offset:2px;box-shadow:inset 0 calc(var(--cell) * -.08) 0 #0000002a,0 0 0 9px var(--yellow)}
-.car.hint .body{animation:hintblink .5s ease-in-out 5}
-@keyframes hintblink{50%{box-shadow:0 0 0 10px #fff,0 0 0 16px var(--sky)}}
 .car.bump{animation:bump .25s}
 @keyframes bump{30%{transform:translate(var(--bx,0),var(--by,0))}}
 
@@ -200,7 +196,6 @@ button:focus-visible{outline:4px solid var(--blue);outline-offset:3px}
 @media (orientation:portrait){
   .game-body{flex-direction:column;gap:12px}
   .panel{width:100%;max-width:640px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .panel .hint-box{grid-column:1/-1}
   .board-wrap{--size:min(calc(100vw - 40px), calc(100dvh - 330px), 640px)}
   .stage-title{font-size:24px}
   .lot-select{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(5,1fr)}
@@ -335,10 +330,8 @@ button:focus-visible{outline:4px solid var(--blue);outline-offset:3px}
       <div class="btn-grid">
         <button class="btn small" id="btn-undo" onclick="undoMove()">↩ 되돌리기</button>
         <button class="btn small" onclick="resetStage()">🔄 처음부터</button>
-        <button class="btn small yellow" onclick="showHint()">💡 힌트</button>
-        <button class="btn small" onclick="openStages(currentTier)">🅿️ 목록</button>
+        <button class="btn small wide" onclick="openStages(currentTier)">🅿️ 스테이지 목록</button>
       </div>
-      <div class="hint-box" id="hint-box"></div>
     </aside>
     <div class="board-wrap" id="board-wrap">
       <div class="board">
@@ -447,7 +440,7 @@ const STORE = 'rh_classroom_v4';
 let records = {easy:{},medium:{},hard:{},superhard:{}};
 let sound = true;
 let currentTier = 'easy', currentStage = 0;
-let vehicles = [], selectedId = 'T', moveHist = [], moves = 0, seconds = 0, hinted = false;
+let vehicles = [], selectedId = 'T', moveHist = [], moves = 0, seconds = 0;
 let clearing = false, drag = null, timer = null, autoMode = false, backtick = false;
 
 const $ = id => document.getElementById(id);
@@ -470,7 +463,7 @@ function tierStars(k){return Object.values(records[k]||{}).reduce((s,r)=>s+(r.st
 function tierCleared(k){return Object.values(records[k]||{}).filter(r=>r.cleared).length}
 function isUnlocked(k,i){return i===0||Boolean(records[k]?.[i-1]?.cleared)||Boolean(records[k]?.[i]?.cleared)}
 function fmt(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
-function starsFor(m,opt,usedHint){let s=m<=opt?3:m<=Math.ceil(opt*1.5)?2:1;if(usedHint)s=Math.min(s,2);return s}
+function starsFor(m,opt){return m<=opt?3:m<=Math.ceil(opt*1.5)?2:1}
 
 /* ---------- sound ---------- */
 let actx=null;
@@ -530,8 +523,8 @@ function sizeBoard(){
 function startStage(k,i){
   if(!canPlay())return;
   stopTimer();currentTier=k;currentStage=i;applyTier(k);
-  vehicles=STAGE_DATA[k][i].map(v=>({...v}));selectedId='T';moveHist=[];moves=0;seconds=0;hinted=false;clearing=false;autoMode=false;
-  const t=TIERS[k];$('g-tier').textContent=t.emoji+' '+t.name;$('g-stage').textContent=i+1;$('hint-box').textContent='';
+  vehicles=STAGE_DATA[k][i].map(v=>({...v}));selectedId='T';moveHist=[];moves=0;seconds=0;clearing=false;autoMode=false;
+  const t=TIERS[k];$('g-tier').textContent=t.emoji+' '+t.name;$('g-stage').textContent=i+1;
   show('screen-game');requestAnimationFrame(()=>{sizeBoard();drawCars(true)});drawCars(true);updateHud();startTimer();
 }
 function resetStage(){if(!canPlay()||clearing)return;startStage(currentTier,currentStage)}
@@ -575,7 +568,6 @@ function commit(v,delta,silent){
   moveHist.push({id:v.id,r:v.r,c:v.c});
   if(v.dir==='H')v.c+=delta;else v.r+=delta;
   moves++;if(!silent)beep(320+Math.random()*60,.06,'triangle',.07);
-  $('hint-box').textContent='';document.querySelectorAll('.car.hint').forEach(e=>e.classList.remove('hint'));
   drawCars(false);updateHud();checkWin();
 }
 function bump(v,dir){const el=$('car-'+v.id);if(!el)return;el.style.setProperty('--bx',v.dir==='H'?dir*6+'px':'0');el.style.setProperty('--by',v.dir==='V'?dir*6+'px':'0');el.classList.remove('bump');void el.offsetWidth;el.classList.add('bump');beep(140,.07,'sawtooth',.03)}
@@ -623,9 +615,9 @@ function undoMove(){
 function updateHud(){
   const opt=OPTIMAL[currentTier][currentStage];
   $('g-moves').textContent=moves;$('g-time').textContent=fmt(seconds);$('btn-undo').disabled=!moveHist.length||clearing;
-  const s=starsFor(moves,opt,hinted),two=Math.ceil(opt*1.5);
+  const s=starsFor(moves,opt),two=Math.ceil(opt*1.5);
   $('g-proj').innerHTML='<b>'+'★'.repeat(s)+'</b>'+'★'.repeat(3-s);
-  $('g-goal').textContent=hinted?'힌트 사용 · 최대 별 2개':`★3: ${opt}번 · ★2: ${two}번 이하`;
+  $('g-goal').textContent=`★3: ${opt}번 · ★2: ${two}번 이하`;
 }
 function startTimer(){stopTimer();timer=setInterval(()=>{if(canPlay()&&!clearing&&!$('screen-game').classList.contains('hidden')){seconds++;$('g-time').textContent=fmt(seconds)}},1000)}
 function stopTimer(){if(timer){clearInterval(timer);timer=null}}
@@ -634,7 +626,7 @@ function stopTimer(){if(timer){clearInterval(timer);timer=null}}
 function checkWin(){
   const t=vehicles.find(v=>v.id==='T');if(!t||t.c!==4||clearing)return;
   clearing=true;stopTimer();
-  const opt=OPTIMAL[currentTier][currentStage],stars=starsFor(moves,opt,hinted);
+  const opt=OPTIMAL[currentTier][currentStage],stars=starsFor(moves,opt);
   if(!autoMode){
     const prev=records[currentTier][currentStage]||{};
     records[currentTier][currentStage]={cleared:true,stars:Math.max(prev.stars||0,stars),best:Math.min(prev.best??Infinity,moves),time:Math.min(prev.time??Infinity,seconds)};
@@ -650,10 +642,7 @@ function showClear(stars,opt){
   $('c-title').textContent=last?(tierCleared(currentTier)===10?'🏆 난이도 완주!':'탈출 성공!'):'탈출 성공!';
   $('c-moves').textContent=moves+'번';$('c-time').textContent=fmt(seconds);
   $('c-msg').textContent=autoMode?'자동 풀이로 탈출했어요. (기록은 저장되지 않아요)':
-    stars===3?(hinted?'':'완벽해요! 최소 이동으로 풀었어요. 🎉'):
-    hinted?`힌트 도움으로 탈출! 다음엔 혼자 ${opt}번에 도전!`:
-    `최소 ${opt}번이면 별 3개! 다시 도전해 볼까요?`;
-  if(stars===3&&hinted)$('c-msg').textContent='힌트를 써서 별은 2개까지예요.';
+    stars===3?'완벽해요! 최소 이동으로 풀었어요. 🎉':`최소 ${opt}번이면 별 3개! 다시 도전해 볼까요?`;
   $('c-next').textContent=last?'목록으로 ▶':'다음 칸 ▶';
   const ss=$('c-stars').children;[...ss].forEach((s,i)=>{s.className=(i<stars?'on':'');setTimeout(()=>{s.classList.add('show');if(i<stars)beep(880+i*120,.1,'square',.05)},250+i*260)});
   openModal('modal-clear');confetti();
@@ -664,7 +653,7 @@ function confetti(){
   setTimeout(()=>box.innerHTML='',3800);
 }
 
-/* ---------- solver (hint + teacher demo) ---------- */
+/* ---------- solver (teacher demo) ---------- */
 function solve(start){
   const key=s=>s.map(v=>v.r*6+v.c).join(',');
   const seen=new Set([key(start)]);let q=[{s:start,first:null}];
@@ -681,16 +670,6 @@ function solve(start){
       }}});
     }q=nq;}
   return null;
-}
-function showHint(){
-  if(!canPlay()||clearing)return;
-  const m=solve(vehicles.map(v=>({...v})));
-  if(!m){$('hint-box').textContent='이미 출구가 열렸어요! 빨강이를 오른쪽으로 쭉!';return}
-  const v=vehicles.find(x=>x.id===m.id),name=(v.id==='T'?'빨강이':(COLORS[v.color]||COLORS.silver)[1]+' '+(v.len===3?'트럭':'자동차'));
-  const dirTxt=v.dir==='H'?(m.delta>0?'오른쪽 ▶':'◀ 왼쪽'):(m.delta>0?'아래 ▼':'위 ▲');
-  hinted=true;select(v.id);
-  document.querySelectorAll('.car.hint').forEach(e=>e.classList.remove('hint'));const el=$('car-'+v.id);void el.offsetWidth;el.classList.add('hint');
-  $('hint-box').textContent=`💡 ${name}을(를) ${dirTxt}으로 ${Math.abs(m.delta)}칸!`;beep(700,.12,'sine',.08);updateHud();
 }
 async function autoSolve(){
   if(!canPlay()||clearing)return;autoMode=true;
